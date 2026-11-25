@@ -1099,12 +1099,17 @@ write_tuple(pgactiveOutputData * data, StringInfo out, Relation rel,
 			/* pass by value */
 			if (att->attbyval)
 			{
+				int64		byval_buf;	/* aligned scratch space */
+
 				pq_sendint(out, att->attlen, 4);	/* length */
 
-				enlargeStringInfo(out, att->attlen);
-				store_att_byval(out->data + out->len, values[i], att->attlen);
-				out->len += att->attlen;
-				out->data[out->len] = '\0';
+				/*
+				 * The StringInfo write position is arbitrarily aligned, so
+				 * store into an aligned local buffer and copy it over.
+				 */
+				Assert(att->attlen > 0 && (size_t) att->attlen <= sizeof(byval_buf));
+				store_att_byval(&byval_buf, values[i], att->attlen);
+				appendBinaryStringInfo(out, (char *) &byval_buf, att->attlen);
 			}
 			/* fixed length non-varlena pass-by-reference type */
 			else if (att->attlen > 0)
